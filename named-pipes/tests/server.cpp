@@ -1,13 +1,17 @@
+/**
+ * @brief: Server side program for testing named pipes IPC.
+ */
+
 #include <iostream>
 #include <string.h>
 #include "./../src/NamedPipeWrapper.h"
 #include "testCommon.h"
 
-
-int main()
+int runTestServer()
 {
     int returnCode = 0;
     NamedPipeWrapper namedPipe;
+    Buffer<uint8_t*> readBuffer;
     
     returnCode = NamedPipeWrapper::Create(TEST_PIPE_NAME);
 
@@ -25,20 +29,22 @@ int main()
         return ERROR;
     }
 
-
-    Buffer<uint8_t*> buf;
-
     while(1)
     {   
-        auto retVal = namedPipe.Read(buf);
-        std::cout << "Read return value: " << retVal << std::endl;
+        readBuffer.Clear();
+        
+        auto retVal = namedPipe.Read(readBuffer);
+        if(retVal)
+        {
+            std::cout << "[X] Read failed with error " << retVal << std::endl;
+            continue;
+        }
 
-        buf.PrintAsUnicode();
-        break;
+        std::cout << "[ ] Incoming message : ";
+        readBuffer.PrintAsUnicode();
     }
     
     returnCode = namedPipe.Close();
-
     if(returnCode)
     {
         std::cout << "[X] Close failed with error " << returnCode << std::endl;
@@ -46,4 +52,9 @@ int main()
     }
 
     return SUCCESS;
+}
+
+int main()
+{
+    return runTestServer();
 }

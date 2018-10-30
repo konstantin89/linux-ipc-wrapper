@@ -55,6 +55,11 @@ public:
         mBuffer.insert(mBuffer.end(), content, content + size);
     }
 
+    void Clear()
+    {
+        mBuffer.clear();
+    }
+
     iterator Begin()
     {
         return mBuffer.begin();

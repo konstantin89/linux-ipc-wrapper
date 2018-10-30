@@ -11,10 +11,10 @@ TEST_CLIENT_BIN=$(BIN_PATH)client
 
 all: $(TEST_SERVER_BIN) $(TEST_CLIENT_BIN) 
 
-$(TEST_SERVER_BIN): $(BIN_PATH)NamedPipeWrapper.o
+$(TEST_SERVER_BIN): $(BIN_PATH)NamedPipeWrapper.o ./tests/server.cpp
 	$(CC) $(CFLAGS) $(DBGFLAGS) ./tests/server.cpp -o $@ $^ 
 
-$(TEST_CLIENT_BIN): $(BIN_PATH)NamedPipeWrapper.o
+$(TEST_CLIENT_BIN): $(BIN_PATH)NamedPipeWrapper.o ./tests/client.cpp
 	$(CC) $(CFLAGS) $(DBGFLAGS) ./tests/client.cpp -o $@ $^ 
 
 $(BIN_PATH)NamedPipeWrapper.o: ./src/NamedPipeWrapper.cpp 
