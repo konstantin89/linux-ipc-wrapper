@@ -1,4 +1,5 @@
 #include <iostream>
+#include <string.h>
 #include "./../src/NamedPipeWrapper.h"
 #include "testCommon.h"
 
@@ -16,15 +17,26 @@ int main()
         return ERROR;
     }
 
-    returnCode = namedPipe.Open(TEST_PIPE_NAME);
+    returnCode = namedPipe.OpenReader(TEST_PIPE_NAME);
 
     if(returnCode)
     {
-        std::cout << "[X] Open failed with error " << returnCode << std::endl;
+        std::cout << "[X] Open failed with error " << std::string(strerror(returnCode)) << std::endl;
         return ERROR;
     }
 
 
+    Buffer<uint8_t*> buf;
+
+    while(1)
+    {   
+        auto retVal = namedPipe.Read(buf);
+        std::cout << "Read return value: " << retVal << std::endl;
+
+        buf.PrintAsUnicode();
+        break;
+    }
+    
     returnCode = namedPipe.Close();
 
     if(returnCode)

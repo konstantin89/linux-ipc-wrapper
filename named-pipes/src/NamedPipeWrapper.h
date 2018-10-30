@@ -11,6 +11,9 @@ class NamedPipeWrapper
 
 public:
 
+    using BufferType = uint8_t;
+    using BufferPtrType = BufferType*;
+
     /**
      * @brief: Creates named pipe
      * @returns: 0 on success, errno otherwise.
@@ -29,10 +32,16 @@ public:
     ~NamedPipeWrapper();
     
     /**
-     * @brief: Open named pipe
+     * @brief: Open named pipe for reading
      * @returns: 0 on success, errno otherwise.
      */
-    int Open(std::string pipeName);
+    int OpenReader(std::string pipeName);
+
+    /**
+     * @brief: Open named pipe for writing
+     * @returns: 0 on success, errno otherwise.
+     */
+    int OpenWriter(std::string pipeName);
 
     /**
      * @brief: Closes named pipe.
@@ -40,17 +49,19 @@ public:
      */
     int Close();
 
+    int Write(Buffer<BufferPtrType> &buffer);
+    int Read(Buffer<BufferPtrType> &buffer);
+
+
+private:
+
+    int openPipe(std::string pipeName, int mode);
+
 private:
 
     int mPipeFd;
     std::string mPipeName;
     
-    std::unique_ptr<Buffer<char*>> mBuffer;
-
-private:
-
-    const uint32_t _initialBufferSize = 1024;
-
 };
 
 #endif

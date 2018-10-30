@@ -1,27 +1,32 @@
 #ifndef __BUFFER_H
 #define __BUFFER_H
 
+#include <iostream>
 #include <memory>
+#include <vector>
+#include <type_traits>
 
-template <typename MemoryType>
+template <typename MemoryPointerType>
 class Buffer
 {
 public:
 
+    using MemoryType = typename std::remove_pointer<MemoryPointerType>::type;
+
     using SizeType = uint64_t;
+    using iterator = typename std::vector<MemoryType>::iterator;
+    using const_iterator = typename std::vector<MemoryType>::const_iterator;
 
 
 public:
     Buffer()
     {
-        mSize = 0;
-        mCapacity = 0;
+
     }
 
     Buffer(SizeType initialCapacity)
     {
-        mSize = 0;
-        mCapacity = 0;
+        mBuffer.reserve(initialCapacity);
     }
 
     ~Buffer()
@@ -31,36 +36,57 @@ public:
 
     Buffer(const Buffer& other)
     {
-
+        mBuffer = other.mBuffer;
     }
 
     void Swap(Buffer& other)
     {
-
+        mBuffer.swap(other.mBuffer);
     }
 
-    void Fill(MemoryType content, SizeType size)
+    void Insert(MemoryPointerType content, SizeType size)
     {
-
+        mBuffer.clear();
+        mBuffer.insert(mBuffer.begin(), content, content + size);
     }
 
-    void Append(MemoryType content, SizeType size)
+    void Append(MemoryPointerType content, SizeType size)
     {
-
+        mBuffer.insert(mBuffer.end(), content, content + size);
     }
 
-    void Resize(SizeType newSize)
+    iterator Begin()
     {
-        
+        return mBuffer.begin();
     }
 
+    iterator End()
+    {
+        return mBuffer.end();
+    }
+
+    SizeType Size()
+    {
+        return mBuffer.size();
+    }
+
+    MemoryPointerType Front()
+    {
+        return &mBuffer[0];
+    }
+
+    void PrintAsUnicode()
+    {
+        for(auto elem : mBuffer)
+        {
+            std::cout << elem;
+        }
+        std::cout << std::endl;
+    }
 
 private:
 
-    SizeType mSize;
-    SizeType mCapacity;
-
-    std::unique_ptr<MemoryType> mBuffer;
+    std::vector<MemoryType> mBuffer;
 };
 
 #endif
