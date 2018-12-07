@@ -4,42 +4,49 @@
 #include <chrono>
 #include <thread>
 
-int main()
-{
-    std::string lTestMsg("TEST_MESSAGE");
+std::string gTestMessageStr("TEST_MESSAGE");
 
-    int returnCode = SUCCESS_CODE;
+int runMqueueClientTest()
+{
+    int lReturnCode = SUCCESS_CODE;
 
     MsgQueueWrapper lMsgQueue;
 
-    returnCode = lMsgQueue.OpenWriter(MSG_QUEUE_NAME);
+    lReturnCode = lMsgQueue.OpenWriter(MSG_QUEUE_NAME);
 
-    if(returnCode != SUCCESS_CODE)
+    if(lReturnCode != SUCCESS_CODE)
     {
-       printError(returnCode, "OpenReader failed"); 
+       printError(lReturnCode, "OpenReader failed"); 
     }
 
     MsgQueueWrapper::Message lMessage;
 
-    lMessage.content.Insert(lTestMsg.data(), lTestMsg.size());
+    lMessage.content.Insert(gTestMessageStr.data(), gTestMessageStr.size());
     lMessage.priority = MsgQueueWrapper::Low;
 
     while(1)
     {
-        returnCode = lMsgQueue.Send(lMessage);
+        lReturnCode = lMsgQueue.Send(lMessage);
 
-        if(returnCode != SUCCESS_CODE)
+        if(lReturnCode != SUCCESS_CODE)
         {
-            printError(returnCode, "Send failed");
+            printError(lReturnCode, "Send failed");
             break;
         }
         else
         {
-            lMessage.content.PrintAsUnicode();
+            std::cout << "message sent: " 
+                << lMessage.content.GetBufferAsString().c_str()
+                << std::endl;
         }
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
-    return returnCode;
+    return lReturnCode;
+}
+
+int main()
+{
+    return runMqueueClientTest();
 }

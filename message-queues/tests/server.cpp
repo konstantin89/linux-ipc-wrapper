@@ -1,3 +1,4 @@
+#include <cstdio>
 #include "./../src/MsgQueueWrapper.h"
 #include "common.h"
 
@@ -5,7 +6,19 @@
 #define MAX_MSG_NUMBER 10 
 #define MSG_QUEUE_MODE 0644
 
-int main()
+void printReceivedMessage(MsgQueueWrapper::Message& aMessage)
+{
+    char lFormattedMessage[2*MAX_MSG_SIZE];
+
+    sprintf(lFormattedMessage, "[V] message received: size:[%lu], priority:[%d], content:[%s],",
+        aMessage.content.Size(), 
+        aMessage.priority, 
+        aMessage.content.GetBufferAsString().c_str());
+
+    std::cout << lFormattedMessage << std::endl;
+}
+
+int runMqueueServerTest()
 {
     int returnCode = SUCCESS_CODE;
 
@@ -43,13 +56,17 @@ int main()
         if(returnCode != SUCCESS_CODE)
         {
             printError(returnCode, "Receive failed");
-            //break;
+            break;
         }
         else
         {
-            std::cout << "Message received" << std::endl;
+            printReceivedMessage(lMessage);
         }
     }
-
     return returnCode;
+}
+
+int main()
+{
+    return runMqueueServerTest();
 }

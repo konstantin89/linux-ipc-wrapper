@@ -1,3 +1,4 @@
+#include <cstring>
 #include <errno.h>
 #include <sys/stat.h>
 #include "MsgQueueWrapper.h"
@@ -53,7 +54,11 @@ int MsgQueueWrapper::Create(
 
  MsgQueueWrapper::~MsgQueueWrapper()
  {
-     /* EMPTY */
+     if(mReceiveBuffer)
+     {
+        delete[] mReceiveBuffer;
+     }
+     
  }
 
 int MsgQueueWrapper::SetQueueAttributes(uint64_t aMaxSize, uint64_t aMsgSize)
@@ -130,28 +135,48 @@ int MsgQueueWrapper::Receive(Message &aMessage)
     }
 
     int returnCode = SUCCESS_CODE;
-    uint64_t lMessageMaxSize = 0;
     uint32_t lPosixMsgPriority;
 
-    returnCode = GetQueueMsgMaxSize(lMessageMaxSize);
 
     if(returnCode != SUCCESS_CODE)
     {
         return returnCode;
     }
 
-    aMessage.content.Reserve(lMessageMaxSize);
+    if(!mReceiveBuffer)
+    {
+        allocateReceiveBuffer();
+    }
 
-    returnCode = mq_receive(
+    auto lReceiveRetCode = mq_receive(
         mMsgQueueDesc, 
-        aMessage.content.Front(), 
-        aMessage.content.Capacity(),
+        mReceiveBuffer, 
+        mReceiveBufferSize,
         &lPosixMsgPriority);
 
-    if(returnCode != SUCCESS_CODE)
-    {
-        return returnCode;
+    if(lReceiveRetCode == ERROR_CODE && errno == EMSGSIZE)
+    {   
+        // Resize the receive buffer, and retry mq_receive.
+        allocateReceiveBuffer();
+
+        lReceiveRetCode = mq_receive(
+            mMsgQueueDesc, 
+            mReceiveBuffer, 
+            mReceiveBufferSize,
+            &lPosixMsgPriority);
+
+        if(lReceiveRetCode == ERROR_CODE)
+        {
+            return errno;
+        }
+
     }
+    else if(lReceiveRetCode == ERROR_CODE)
+    {
+        return errno;
+    }
+
+    aMessage.content.Insert(mReceiveBuffer, lReceiveRetCode);
 
     aMessage.priority = priorityFromPosix(lPosixMsgPriority);
 
@@ -247,4 +272,36 @@ MsgQueueWrapper::MsgPriority MsgQueueWrapper::priorityFromPosix(uint32_t aPosixP
         default:
             return Low;
     }
+}
+
+void MsgQueueWrapper::deleteReceiveBuffer()
+{
+    if(mReceiveBuffer)
+    {
+        delete[] mReceiveBuffer;
+        mReceiveBufferSize = 0;
+    }
+}
+
+int MsgQueueWrapper::allocateReceiveBuffer()
+{
+    deleteReceiveBuffer();
+
+    auto retVal = GetQueueMsgMaxSize(mReceiveBufferSize);
+
+    if(retVal != SUCCESS_CODE)
+    {
+        return errno;
+    }
+
+    mReceiveBuffer = new char[mReceiveBufferSize];
+
+    if(!mReceiveBuffer)
+    {
+        return ERROR_CODE;
+    }
+
+    mReceiveBufferSize = mReceiveBufferSize;
+
+    return SUCCESS_CODE;
 }

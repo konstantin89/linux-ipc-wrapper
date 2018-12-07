@@ -54,9 +54,6 @@ public:
         uint64_t aMsgMaxSize,
         uint64_t aMaxMsgNumber);
 
-    /**
-     * @brief: Remove message queue.
-     */
     static int Remove(std::string aQueueName);
     
 
@@ -66,82 +63,48 @@ public:
 
     ~MsgQueueWrapper();
 
-    /**
-     * 
-     */
     int OpenReader(std::string aQueueName);
 
-    /**
-     * 
-     */
     int OpenWriter(std::string aQueueName);
 
-    /**
-     * 
-     */
     int OpenRDWR(std::string aQueueName);
-    
 
-    /**
-     * 
-     */
     int Close();
 
-    /**
-     * 
-     */
     int Send(Message aMessage);
 
-    /**
-     * 
-     */
     int Receive(Message &aMessage);
 
-    /**
-     * 
-     */
-    int SetMessageSignal(/* callback, contex */);
+    //int SetMessageSignal(/* callback, contex */);
 
-    /**
-     * 
-     */
     int SetQueueAttributes(uint64_t aMaxSize, uint64_t aMsgSize);
 
-    /**
-     * 
-     */
     int GetQueueMsgMaxSize(uint64_t &aMsgMaxSize);
 
-    /**
-     * 
-     */
     long GetCurrentMsgCount();
-
 
 private:
 
     std::string mQueueName;
     mqd_t mMsgQueueDesc;
-   
+
+    char* mReceiveBuffer = NULL;
+    size_t mReceiveBufferSize = 0;
+
 
 private:
 
     int openQueue(std::string aQueueName,int aMode);
 
-    /**
-     * 
-     */
     uint32_t priorityToPosix(MsgPriority aPriorityEnum);
-
-    /**
-     * 
-     */
+ 
     MsgPriority priorityFromPosix(uint32_t aPosixPriority);
 
-    /**
-     * 
-     */
     int getQueueAttributes(QueueAttrType &aAttributes);
+
+    void deleteReceiveBuffer();
+
+    int allocateReceiveBuffer();
 
 };
 

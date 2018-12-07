@@ -99,6 +99,11 @@ public:
         std::cout << std::endl;
     }
 
+    std::string GetBufferAsString()
+    {
+        return std::string(Front(), Size());
+    }
+
 private:
 
     std::vector<MemoryType> mBuffer;
