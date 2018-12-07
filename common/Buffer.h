@@ -60,6 +60,11 @@ public:
         mBuffer.clear();
     }
 
+    void Reserve(SizeType aSize)
+    {
+        mBuffer.reserve(aSize);
+    }
+
     iterator Begin()
     {
         return mBuffer.begin();
@@ -73,6 +78,11 @@ public:
     SizeType Size()
     {
         return mBuffer.size();
+    }
+
+    SizeType Capacity()
+    {
+        return mBuffer.capacity();
     }
 
     MemoryPointerType Front()
