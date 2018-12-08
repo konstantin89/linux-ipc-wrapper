@@ -1,8 +1,6 @@
 #include "./../src/MsgQueueWrapper.h"
 #include "common.h"
 
-#include <chrono>
-#include <thread>
 
 std::string gTestMessageStr("TEST_MESSAGE");
 
@@ -41,6 +39,7 @@ int runMqueueClientTest()
         }
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
+
     }
 
     return lReturnCode;

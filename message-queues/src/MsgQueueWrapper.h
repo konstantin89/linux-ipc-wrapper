@@ -4,6 +4,7 @@
 #include <string>
 #include <memory>
 #include <mqueue.h>
+#include <condition_variable>
 
 #include "./../../common/Buffer.h"
 
@@ -17,6 +18,8 @@ public:
     using BufferPtrType = BufferType*;
 
     using QueueAttrType = struct mq_attr;
+
+    using PConditionalVar = std::condition_variable*;
 
     typedef enum{
         Low,
@@ -59,6 +62,40 @@ public:
 
 public:
 
+    /**
+     * @brief: Send a message to message queue.
+     * 
+     * @param: aMessage - Message to send.
+     * 
+     * @returns: ERROR_SUCCESS - iff call ended successfully.
+     *           errno - On error
+     */
+    int Send(Message aMessage);
+
+    /**
+     * @brief: Receive message from linux message queue.
+     *         The call with blocks until message is available for reading 
+     * 
+     * @param: aMessage - The message that has been read from queue.
+     * 
+     * @returns: ERROR_SUCCESS - iff call ended successfully.
+     *           errno - On error
+     */
+    int ReceiveSync(Message &aMessage);
+
+    /**
+     * @brief: Receive message from linux message queue.
+     *         The call returns immidiatly, even if no message is 
+     *         available for reading in the queue.
+     * 
+     * @param: aMessage - The message that has been read from queue.
+     * 
+     * @returns: ERROR_SUCCESS - On success returns.
+     *           EAGAIN - No message available in queue.
+     *           errno - If other error occures.
+     */
+    int ReceiveAsync(Message &aMessage);
+
     MsgQueueWrapper();
 
     ~MsgQueueWrapper();
@@ -67,15 +104,7 @@ public:
 
     int OpenWriter(std::string aQueueName);
 
-    int OpenRDWR(std::string aQueueName);
-
     int Close();
-
-    int Send(Message aMessage);
-
-    int Receive(Message &aMessage);
-
-    //int SetMessageSignal(/* callback, contex */);
 
     int SetQueueAttributes(uint64_t aMaxSize, uint64_t aMsgSize);
 
@@ -88,8 +117,8 @@ private:
     std::string mQueueName;
     mqd_t mMsgQueueDesc;
 
-    char* mReceiveBuffer = NULL;
-    size_t mReceiveBufferSize = 0;
+    PConditionalVar mMessageNotificationCv;
+    std::mutex mCondVarMutex;
 
 
 private:
@@ -102,9 +131,9 @@ private:
 
     int getQueueAttributes(QueueAttrType &aAttributes);
 
-    void deleteReceiveBuffer();
+    static void receiveAsyncMessageAndNotify(union sigval sv);
 
-    int allocateReceiveBuffer();
+    int setMessageNotification();
 
 };
 

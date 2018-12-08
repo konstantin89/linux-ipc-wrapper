@@ -1,6 +1,7 @@
 #include <cstring>
 #include <errno.h>
 #include <sys/stat.h>
+       #include <signal.h>
 #include "MsgQueueWrapper.h"
 
 #define SUCCESS_CODE 0
@@ -50,15 +51,12 @@ int MsgQueueWrapper::Create(
  MsgQueueWrapper::MsgQueueWrapper()
  {
     mMsgQueueDesc = INVALID_MSG_QUEUE_DESC;
+    mMessageNotificationCv = new std::condition_variable;
  }
 
  MsgQueueWrapper::~MsgQueueWrapper()
  {
-     if(mReceiveBuffer)
-     {
-        delete[] mReceiveBuffer;
-     }
-     
+     /* EMPTY */
  }
 
 int MsgQueueWrapper::SetQueueAttributes(uint64_t aMaxSize, uint64_t aMsgSize)
@@ -80,19 +78,22 @@ int MsgQueueWrapper::SetQueueAttributes(uint64_t aMaxSize, uint64_t aMsgSize)
 
 int MsgQueueWrapper::OpenReader(std::string aQueueName)
 {
-    return openQueue(aQueueName, O_RDONLY);
+    int lRetVal = SUCCESS_CODE;
+
+    lRetVal = openQueue(aQueueName, O_NONBLOCK | O_RDONLY);
+
+    if(lRetVal != SUCCESS_CODE)
+    {
+        return lRetVal;
+    }
+
+    return lRetVal;
 }
 
 
 int MsgQueueWrapper::OpenWriter(std::string aQueueName)
 {
     return openQueue(aQueueName, O_WRONLY);
-}
-
-
-int MsgQueueWrapper::OpenRDWR(std::string aQueueName)
-{
-    return openQueue(aQueueName, O_RDWR);
 }
 
 int MsgQueueWrapper::Close()
@@ -127,7 +128,7 @@ int MsgQueueWrapper::Send(Message aMessage)
     return returnCode;
 }
 
-int MsgQueueWrapper::Receive(Message &aMessage)
+int MsgQueueWrapper::ReceiveAsync(Message &aMessage)
 {
     if(mMsgQueueDesc == INVALID_MSG_QUEUE_DESC)
     {
@@ -135,53 +136,96 @@ int MsgQueueWrapper::Receive(Message &aMessage)
     }
 
     int returnCode = SUCCESS_CODE;
-    uint32_t lPosixMsgPriority;
+    uint32_t lPosixMsgPriority = 0;
+    uint64_t lMaxMsgSize = 0;
 
+    returnCode = GetQueueMsgMaxSize(lMaxMsgSize);
 
     if(returnCode != SUCCESS_CODE)
-    {
-        return returnCode;
-    }
-
-    if(!mReceiveBuffer)
-    {
-        allocateReceiveBuffer();
-    }
-
-    auto lReceiveRetCode = mq_receive(
-        mMsgQueueDesc, 
-        mReceiveBuffer, 
-        mReceiveBufferSize,
-        &lPosixMsgPriority);
-
-    if(lReceiveRetCode == ERROR_CODE && errno == EMSGSIZE)
-    {   
-        // Resize the receive buffer, and retry mq_receive.
-        allocateReceiveBuffer();
-
-        lReceiveRetCode = mq_receive(
-            mMsgQueueDesc, 
-            mReceiveBuffer, 
-            mReceiveBufferSize,
-            &lPosixMsgPriority);
-
-        if(lReceiveRetCode == ERROR_CODE)
-        {
-            return errno;
-        }
-
-    }
-    else if(lReceiveRetCode == ERROR_CODE)
     {
         return errno;
     }
 
-    aMessage.content.Insert(mReceiveBuffer, lReceiveRetCode);
+    auto lReceiveBuffer = new char[lMaxMsgSize];
+
+    if(!lReceiveBuffer)
+    {
+        return ERROR_CODE;
+    }
+
+    auto lReceiveRetCode = mq_receive(
+        mMsgQueueDesc, 
+        lReceiveBuffer, 
+        lMaxMsgSize,
+        &lPosixMsgPriority);
+
+    if(lReceiveRetCode == ERROR_CODE)
+    {
+        delete[] lReceiveBuffer;
+        return errno;
+    }
+
+    aMessage.content.Insert(lReceiveBuffer, lReceiveRetCode);
 
     aMessage.priority = priorityFromPosix(lPosixMsgPriority);
 
+    delete[] lReceiveBuffer;
     return SUCCESS_CODE;
 }
+
+int MsgQueueWrapper::ReceiveSync(Message &aMessage)
+{
+    if(mMsgQueueDesc == INVALID_MSG_QUEUE_DESC)
+    {
+        return ERROR_CODE;
+    }
+
+    int returnCode = SUCCESS_CODE;
+    uint32_t lPosixMsgPriority = 0;
+    uint64_t lMaxMsgSize = 0;
+
+    returnCode = GetQueueMsgMaxSize(lMaxMsgSize);
+
+    if(returnCode != SUCCESS_CODE)
+    {
+        return errno;
+    }
+
+    auto lReceiveBuffer = new char[lMaxMsgSize];
+
+    if(!lReceiveBuffer)
+    {
+        return ERROR_CODE;
+    }
+
+    auto lReceiveRetCode = mq_receive(
+        mMsgQueueDesc, 
+        lReceiveBuffer, 
+        lMaxMsgSize,
+        &lPosixMsgPriority);
+
+    if(lReceiveRetCode == ERROR_CODE && errno != EAGAIN)
+    {
+        delete[] lReceiveBuffer;
+        return errno;
+    }
+
+    if(lReceiveRetCode != ERROR_CODE)
+    {
+        aMessage.content.Insert(lReceiveBuffer, lReceiveRetCode);
+        aMessage.priority = priorityFromPosix(lPosixMsgPriority);
+        delete[] lReceiveBuffer;
+        return SUCCESS_CODE;
+    }
+    setMessageNotification();
+
+    std::unique_lock<std::mutex> lMutexLock(mCondVarMutex);
+    mMessageNotificationCv->wait(lMutexLock);
+    return ReceiveAsync(aMessage);
+
+}
+
+
 
 int MsgQueueWrapper::GetQueueMsgMaxSize(uint64_t &aMsgMaxSize)
 {
@@ -274,34 +318,27 @@ MsgQueueWrapper::MsgPriority MsgQueueWrapper::priorityFromPosix(uint32_t aPosixP
     }
 }
 
-void MsgQueueWrapper::deleteReceiveBuffer()
+int MsgQueueWrapper::setMessageNotification()
 {
-    if(mReceiveBuffer)
-    {
-        delete[] mReceiveBuffer;
-        mReceiveBufferSize = 0;
-    }
-}
+ 
+    struct sigevent lNotificationSignal;
+    lNotificationSignal.sigev_notify = SIGEV_THREAD;
+    lNotificationSignal.sigev_notify_function = receiveAsyncMessageAndNotify;
+    lNotificationSignal.sigev_notify_attributes = NULL;
+    lNotificationSignal.sigev_value.sival_ptr = mMessageNotificationCv;
 
-int MsgQueueWrapper::allocateReceiveBuffer()
-{
-    deleteReceiveBuffer();
-
-    auto retVal = GetQueueMsgMaxSize(mReceiveBufferSize);
-
-    if(retVal != SUCCESS_CODE)
+    auto lRetVal = mq_notify(mMsgQueueDesc, &lNotificationSignal);
+    if(lRetVal != SUCCESS_CODE)
     {
         return errno;
     }
 
-    mReceiveBuffer = new char[mReceiveBufferSize];
-
-    if(!mReceiveBuffer)
-    {
-        return ERROR_CODE;
-    }
-
-    mReceiveBufferSize = mReceiveBufferSize;
-
     return SUCCESS_CODE;
+}
+
+
+void MsgQueueWrapper::receiveAsyncMessageAndNotify(union sigval sv)
+{
+    PConditionalVar lcondVar = (PConditionalVar)sv.sival_ptr;
+    lcondVar->notify_one();
 }

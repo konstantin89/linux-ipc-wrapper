@@ -18,11 +18,13 @@ void printReceivedMessage(MsgQueueWrapper::Message& aMessage)
     std::cout << lFormattedMessage << std::endl;
 }
 
-int runMqueueServerTest()
+int runMqueueAsyncServerTest()
 {
     int returnCode = SUCCESS_CODE;
 
     MsgQueueWrapper lMsgQueue;
+
+    MsgQueueWrapper::Message lMessage;
 
     MsgQueueWrapper::Remove(MSG_QUEUE_NAME);
 
@@ -47,26 +49,17 @@ int runMqueueServerTest()
        return returnCode;
     }
 
-    MsgQueueWrapper::Message lMessage;
-
     while(1)
     {
-        returnCode = lMsgQueue.Receive(lMessage);
-
-        if(returnCode != SUCCESS_CODE)
-        {
-            printError(returnCode, "Receive failed");
-            break;
-        }
-        else
-        {
-            printReceivedMessage(lMessage);
-        }
+        lMsgQueue.ReceiveSync(lMessage);
+        printReceivedMessage(lMessage);
     }
+
+
     return returnCode;
 }
 
 int main()
 {
-    return runMqueueServerTest();
+    return runMqueueAsyncServerTest();
 }
